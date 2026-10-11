@@ -1,6 +1,0 @@
-{
-  "name": "EG9 Climate",
-  "version": "1.0.0",
-  "codeowners": ["danis"],
-  "dependencies": ["climate_ir"]
-}

@@ -1,0 +1,6 @@
+{
+  "domain": "eg9_climate",
+  "name": "EG9 Climate",
+  "codeowners": ["@zojl"],
+  "dependencies": ["remote_transmitter"]
+}

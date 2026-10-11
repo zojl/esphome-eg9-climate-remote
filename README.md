@@ -65,46 +65,26 @@ python3 tools/verify_coverage.py tools/dumps/ir_dictionary.csv
 
 ## How to Use in Your ESPHome Project
 
-### 1. File Placement
-
-Copy or symlink the `eg9_climate` folder into your ESPHome configuration directory under `custom_components/`:
-
-```text
-your-esphome-config/
-├── custom_components/
-│   └── eg9_climate/
-│       ├── __init__.py
-│       ├── climate.py
-│       ├── eg9_climate.h
-│       ├── eg9_climate.cpp
-│       └── manifest.json
-└── ac-controller.yaml
-```
-
-### 2. ESPHome Configuration (`ac-controller.yaml` or as you want — this is just example)
+1. Add the component via `external_components`:
 
 ```yaml
-esphome:
-  name: ac-remote
-
 external_components:
-  - source:
-      type: local
-      path: custom_components
+  - source: github://zojl/esphome-eg9-climate-remote
     components: [ eg9_climate ]
+```
 
-esp32:
-  board: esp32c6 // you may have another board
-  framework:
-    type: esp-idf
+2. Configure your IR transmitter:
 
-// ... some other configs for wifi, api, ota, captive portal, etc ...
-
+```yaml
 remote_transmitter:
-  - pin: GPIO2 // you may use other pin
+  - pin: GPIO2
     carrier_duty_percent: 50
     id: remote_transmitter_1
+```
 
+3. Configure the climate entity:
+
+```yaml
 climate:
   - platform: eg9_climate
     name: "Living Room AC"
