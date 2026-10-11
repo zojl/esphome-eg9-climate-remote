@@ -1228,6 +1228,14 @@ void EG9Climate::control(const climate::ClimateCall &call) {
     this->fan_mode = *call.get_fan_mode();
   if (call.get_swing_mode().has_value()) {
     this->swing_mode = *call.get_swing_mode();
+    if (this->swing_mode == climate::CLIMATE_SWING_VERTICAL) {
+      this->current_swing_code_ = SWING_CODE_AUTO;
+      if (!this->has_vane_select_) {
+        this->set_custom_preset_("Auto");
+      } else if (this->vane_select_ != nullptr) {
+        this->vane_select_->publish_state("Auto");
+      }
+    }
   }
   if (!this->has_vane_select_) {
     if (call.has_custom_preset()) {
