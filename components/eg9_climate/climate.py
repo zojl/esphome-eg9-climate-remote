@@ -51,6 +51,7 @@ async def to_code(config):
         vane_conf = config[CONF_VANE_SELECT_NAME]
 
     if vane_conf is not None:
+        cg.add(var.set_has_vane_select(True))
         vane_var = await select.new_select(
             vane_conf,
             options=[
@@ -64,5 +65,6 @@ async def to_code(config):
         )
         cg.add(vane_var.set_parent(var))
         cg.add(var.set_vane_select(vane_var))
+
 
 

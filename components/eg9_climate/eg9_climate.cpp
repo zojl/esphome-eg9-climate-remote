@@ -1156,6 +1156,19 @@ void EG9VaneSelect::control(const std::string &value) {
 }
 
 void EG9Climate::setup() {
+  if (!this->has_vane_select_) {
+    this->set_supported_custom_presets({
+        "Auto",
+        "Top",
+        "Medium-Top",
+        "Medium",
+        "Medium-Bottom",
+        "Bottom",
+    });
+    if (!this->has_custom_preset()) {
+      this->set_custom_preset_("Auto");
+    }
+  }
 }
 
 climate::ClimateTraits EG9Climate::traits() {
@@ -1199,6 +1212,9 @@ void EG9Climate::set_vane_position(const std::string &position) {
   }
   // Setting a fixed vane position stops continuous vertical swing
   this->swing_mode = climate::CLIMATE_SWING_OFF;
+  if (!this->has_vane_select_) {
+    this->set_custom_preset_(position.c_str());
+  }
   this->transmit_state();
   this->publish_state();
 }
@@ -1212,6 +1228,29 @@ void EG9Climate::control(const climate::ClimateCall &call) {
     this->fan_mode = *call.get_fan_mode();
   if (call.get_swing_mode().has_value()) {
     this->swing_mode = *call.get_swing_mode();
+  }
+  if (!this->has_vane_select_) {
+    if (call.has_custom_preset()) {
+      std::string preset = call.get_custom_preset().str();
+      if (!preset.empty()) {
+        this->set_custom_preset_(preset.c_str());
+        if (preset == "Top") {
+          this->current_swing_code_ = SWING_CODE_TOP;
+        } else if (preset == "Medium-Top") {
+          this->current_swing_code_ = SWING_CODE_MEDIUM_TOP;
+        } else if (preset == "Medium") {
+          this->current_swing_code_ = SWING_CODE_MEDIUM;
+        } else if (preset == "Medium-Bottom") {
+          this->current_swing_code_ = SWING_CODE_MEDIUM_BOTTOM;
+        } else if (preset == "Bottom") {
+          this->current_swing_code_ = SWING_CODE_BOTTOM;
+        } else {
+          this->current_swing_code_ = SWING_CODE_AUTO;
+        }
+        // Choosing a vane position preset stops continuous vertical swing
+        this->swing_mode = climate::CLIMATE_SWING_OFF;
+      }
+    }
   }
 
   this->transmit_state();

@@ -67,6 +67,7 @@ class EG9Climate : public climate::Climate, public Component {
   void setup() override;
   climate::ClimateTraits traits() override;
   void set_vane_position(const std::string &position);
+  void set_has_vane_select(bool has_vane_select) { this->has_vane_select_ = has_vane_select; }
 
  protected:
   void control(const climate::ClimateCall &call) override;
@@ -76,6 +77,7 @@ class EG9Climate : public climate::Climate, public Component {
 
   remote_transmitter::RemoteTransmitterComponent *transmitter_;
   EG9VaneSelect *vane_select_{nullptr};
+  bool has_vane_select_{false};
   Eg9SwingCode current_swing_code_{SWING_CODE_AUTO};
 
   static const std::map<std::vector<uint8_t>, std::pair<uint8_t, uint8_t>> IR_CODE_DICTIONARY;
