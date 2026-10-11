@@ -89,6 +89,8 @@ climate:
   - platform: eg9_climate
     name: "Living Room AC"
     transmitter: remote_transmitter_1
+    # Optional: creates a dedicated select entity instead of presets inside climate card
+    # vane_select_name: "Living Room AC Vane Position"
 ```
 
 ### 3. Home Assistant Integration
@@ -97,4 +99,6 @@ Once flashed, Home Assistant will automatically discover the climate entity with
 - **Mode buttons:** Cool, Heat, Off
 - **Target temperature slider:** 16°C – 31°C
 - **Fan modes:** Auto, Quiet, Low, Medium, High
-- **Swing / Presets:** Available through standard swing controls or preset drop-downs
+- **Swing:** Vertical continuous oscillation (`swing_mode: VERTICAL` vs `OFF`)
+- **Vane Position Presets:** Fixed positions (`Auto`, `Top`, `Medium-Top`, `Medium`, `Medium-Bottom`, `Bottom`) are available right inside the climate card as presets. If `vane_select_name` is configured, they move into a separate select entity instead.
+
