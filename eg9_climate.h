@@ -13,6 +13,7 @@ namespace eg9_climate {
 const uint8_t EG9_HEADER[] = {0xC4, 0xD3, 0x64, 0x80, 0x00};
 const uint8_t EG9_POWER_ON = 0x24;
 const uint8_t EG9_MODE_COOL = 0xC0;
+const uint8_t EG9_MODE_HEAT = 0x80;
 
 // Temperature is encoded as (31 - temp)
 const uint8_t EG9_TEMP_OFFSET = 31;
