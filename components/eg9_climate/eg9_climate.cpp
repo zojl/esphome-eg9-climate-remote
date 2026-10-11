@@ -1148,16 +1148,14 @@ EG9Climate::EG9Climate() : climate::Climate() {
   this->swing_mode = climate::CLIMATE_SWING_OFF;
 }
 
+void EG9VaneSelect::control(const std::string &value) {
+  this->publish_state(value);
+  if (this->parent_ != nullptr) {
+    this->parent_->set_vane_position(value);
+  }
+}
+
 void EG9Climate::setup() {
-  this->set_supported_custom_presets({
-      "Auto",
-      "Top",
-      "Medium-Top",
-      "Medium",
-      "Medium-Bottom",
-      "Bottom",
-      "Swing",
-  });
 }
 
 climate::ClimateTraits EG9Climate::traits() {
@@ -1185,6 +1183,26 @@ climate::ClimateTraits EG9Climate::traits() {
   return traits;
 }
 
+void EG9Climate::set_vane_position(const std::string &position) {
+  if (position == "Top") {
+    this->current_swing_code_ = SWING_CODE_TOP;
+  } else if (position == "Medium-Top") {
+    this->current_swing_code_ = SWING_CODE_MEDIUM_TOP;
+  } else if (position == "Medium") {
+    this->current_swing_code_ = SWING_CODE_MEDIUM;
+  } else if (position == "Medium-Bottom") {
+    this->current_swing_code_ = SWING_CODE_MEDIUM_BOTTOM;
+  } else if (position == "Bottom") {
+    this->current_swing_code_ = SWING_CODE_BOTTOM;
+  } else {
+    this->current_swing_code_ = SWING_CODE_AUTO;
+  }
+  // Setting a fixed vane position stops continuous vertical swing
+  this->swing_mode = climate::CLIMATE_SWING_OFF;
+  this->transmit_state();
+  this->publish_state();
+}
+
 void EG9Climate::control(const climate::ClimateCall &call) {
   if (call.get_mode().has_value())
     this->mode = *call.get_mode();
@@ -1192,34 +1210,8 @@ void EG9Climate::control(const climate::ClimateCall &call) {
     this->target_temperature = *call.get_target_temperature();
   if (call.get_fan_mode().has_value())
     this->fan_mode = *call.get_fan_mode();
-  if (call.get_swing_mode().has_value())
+  if (call.get_swing_mode().has_value()) {
     this->swing_mode = *call.get_swing_mode();
-  
-  auto new_preset_ref = call.get_custom_preset();
-  if (!new_preset_ref.empty()) {
-    // The framework will update this->custom_preset. We just react to the call.
-    if (new_preset_ref == "Auto") {
-      this->current_swing_code_ = SWING_CODE_AUTO;
-      this->swing_mode = climate::CLIMATE_SWING_OFF;
-    } else if (new_preset_ref == "Top") {
-      this->current_swing_code_ = SWING_CODE_TOP;
-      this->swing_mode = climate::CLIMATE_SWING_OFF;
-    } else if (new_preset_ref == "Medium-Top") {
-      this->current_swing_code_ = SWING_CODE_MEDIUM_TOP;
-      this->swing_mode = climate::CLIMATE_SWING_OFF;
-    } else if (new_preset_ref == "Medium") {
-      this->current_swing_code_ = SWING_CODE_MEDIUM;
-      this->swing_mode = climate::CLIMATE_SWING_OFF;
-    } else if (new_preset_ref == "Medium-Bottom") {
-      this->current_swing_code_ = SWING_CODE_MEDIUM_BOTTOM;
-      this->swing_mode = climate::CLIMATE_SWING_OFF;
-    } else if (new_preset_ref == "Bottom") {
-      this->current_swing_code_ = SWING_CODE_BOTTOM;
-      this->swing_mode = climate::CLIMATE_SWING_OFF;
-    } else if (new_preset_ref == "Swing") {
-      this->current_swing_code_ = SWING_CODE_CONTINUOUS;
-      this->swing_mode = climate::CLIMATE_SWING_VERTICAL;
-    }
   }
 
   this->transmit_state();
@@ -1269,7 +1261,12 @@ void EG9Climate::transmit_state() {
         break;
     }
 
-    uint8_t swing_code = this->current_swing_code_;
+    uint8_t swing_code;
+    if (this->swing_mode == climate::CLIMATE_SWING_VERTICAL) {
+      swing_code = SWING_CODE_CONTINUOUS;
+    } else {
+      swing_code = this->current_swing_code_;
+    }
     key[3] = (fan_code << 5) | swing_code;
     
     key[4] = 0x00;

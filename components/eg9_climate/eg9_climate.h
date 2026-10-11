@@ -2,6 +2,7 @@
 
 #include "esphome/components/climate/climate.h"
 #include "esphome/components/remote_transmitter/remote_transmitter.h"
+#include "esphome/components/select/select.h"
 #include <vector>
 #include <map>
 #include <utility>
@@ -41,15 +42,31 @@ enum Eg9SwingCode : uint8_t {
     SWING_CODE_CONTINUOUS     = 0b11100, // 28
 };
 
+class EG9Climate;
+
+class EG9VaneSelect : public select::Select {
+ public:
+  void set_parent(EG9Climate *parent) { this->parent_ = parent; }
+
+ protected:
+  void control(const std::string &value) override;
+
+  EG9Climate *parent_{nullptr};
+};
+
 class EG9Climate : public climate::Climate, public Component {
  public:
   EG9Climate();
   void set_transmitter(remote_transmitter::RemoteTransmitterComponent *transmitter) {
     this->transmitter_ = transmitter;
   }
+  void set_vane_select(EG9VaneSelect *vane_select) {
+    this->vane_select_ = vane_select;
+  }
 
   void setup() override;
   climate::ClimateTraits traits() override;
+  void set_vane_position(const std::string &position);
 
  protected:
   void control(const climate::ClimateCall &call) override;
@@ -58,6 +75,7 @@ class EG9Climate : public climate::Climate, public Component {
   uint8_t reverse_bits(uint8_t data) const;
 
   remote_transmitter::RemoteTransmitterComponent *transmitter_;
+  EG9VaneSelect *vane_select_{nullptr};
   Eg9SwingCode current_swing_code_{SWING_CODE_AUTO};
 
   static const std::map<std::vector<uint8_t>, std::pair<uint8_t, uint8_t>> IR_CODE_DICTIONARY;

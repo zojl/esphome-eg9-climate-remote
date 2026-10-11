@@ -89,6 +89,8 @@ climate:
   - platform: eg9_climate
     name: "Living Room AC"
     transmitter: remote_transmitter_1
+    # Optional: creates a dedicated select entity for vertical vane positions
+    vane_select_name: "Living Room AC Vane Position"
 ```
 
 ### 3. Home Assistant Integration
