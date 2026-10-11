@@ -1,76 +1,73 @@
-# Итоговый отчет по реверс-инжинирингу протокола EG9 Climate
+# EG9 Climate IR Protocol Reverse Engineering Report
 
-## 1. Цель проекта
-Реверс-инжиниринг ИК-протокола кондиционера "EG9 Climate" на основе дампов из Flipper Zero для создания полнофункционального кастомного компонента для ESPHome.
+## 1. Project Goal
+Reverse engineering the infrared (IR) protocol of the "EG9 Climate" air conditioner using Flipper Zero dumps to build a fully featured custom ESPHome component.
 
-## 2. Финальное состояние компонента
-Проект завершается с рабочим, компилирующимся компонентом, который реализует **гибридный подход**, предложенный пользователем:
-- **Динамическая генерация команд:** Компонент формирует ИК-команду (первые 13 байт) на лету, основываясь на настройках пользователя в Home Assistant (режим, температура, и т.д.).
-- **"Словарь" контрольных сумм:** Финальный, 14-й байт (контрольная сумма) не вычисляется, а ищется в жестко закодированном "словаре" (`std::map`), созданном на основе всех предоставленных дампов. Если комбинация настроек есть в словаре, команда отправляется. Если нет — отправка блокируется и в лог выводится предупреждение.
-- **"Умное качание":** Реализовано цикличное переключение всех 6 положений шторки через стандартную кнопку `swing_mode`.
+## 2. Final Component Architecture
+The component implements a **hybrid architecture**:
+- **Dynamic Command Generation:** The first 12 bytes of the IR frame are computed on the fly based on current climate settings in Home Assistant (power, mode, target temperature, fan speed, vane position).
+- **Checksum Lookup Dictionary:** The final 14th byte (CRC checksum) and 13th byte (sequence/dynamic byte) are not computed mathematically, but looked up in a pre-populated lookup table (`std::map`), compiled from exhaustive dumps for both **Cooling** and **Heating** modes.
+- **Smart Swing & Presets:** Supports cyclic vane positions and presets through custom presets (`Auto`, `Top`, `Medium-Top`, `Medium`, `Medium-Bottom`, `Bottom`, `Swing`).
 
-Финальные версии файлов `eg9_climate.h`, `eg9_climate.cpp` и `climate.py` представляют собой законченную реализацию этого подхода.
+The component source files (`eg9_climate.h`, `eg9_climate.cpp`, `climate.py`) provide a complete implementation of this approach.
 
-## 3. Анализ протокола
-В результате долгого анализа мы полностью расшифровали структуру 14-байтового (112-битного) ИК-протокола.
+## 3. Protocol Specification
+The protocol uses a 14-byte (112-bit) frame transmitted over a 38 kHz carrier frequency.
 
-- **Общая структура:** `[Заголовок: 5б] [B6:Пит] [B7:Реж] [B8:Темп] [B9:?] [B10-12:?] [B13:?] [B14:CRC]`
+- **Frame Layout:** `[Header: 5B] [B6: Power] [B7: Mode] [B8: Temp] [B9: Fan & Swing] [B10-B12: Reserved] [B13: Dynamic] [B14: CRC]`
 
-- **B1-B5 (Заголовок):** Статичен — `0xC4, 0xD3, 0x64, 0x80, 0x00`.
+- **B1–B5 (Header):** Static header — `0xC4, 0xD3, 0x64, 0x80, 0x00`.
 
-- **B6 (Питание):**
-  - `0x24`: ВКЛ
-  - `0x04`: ВЫКЛ
+- **B6 (Power):**
+  - `0x24`: ON
+  - `0x04`: OFF (static OFF frame: `0xC4 0xD3 0x64 0x80 0x00 0x04 0xC0 0xE0 0x14 0x00 0x00 0x00 0x00 0xE6`)
 
-- **B7 (Режим):**
-  - `0xC0`: Охлаждение (Cool)
-  - `0x80`: Нагрев (Heat)
-  - `0x40`: Осушение (Dry)
-  - `0x10`: Авто (Auto)
+- **B7 (Mode):**
+  - `0xC0`: Cool
+  - `0x80`: Heat
+  - `0x40`: Dry
+  - `0x10`: Auto
 
-- **B8 (Температура):** Используется нелинейное кодирование.
-  - **Формула:** `(reverse_bits(31 - Температура)) << 4`
-  - `reverse_bits` — это функция, переворачивающая биты в 4-битном полубайте (например, `1000` -> `0001`).
+- **B8 (Temperature):** Non-linear 4-bit nibble encoding.
+  - **Formula:** `(reverse_bits(31 - Temperature)) << 4`
+  - `reverse_bits` reverses bits in a 4-bit nibble (e.g., `1000` (8) -> `0001` (1)).
+  - Valid range: 16°C (`0xF0`) to 31°C (`0x00`).
 
-- **B9 (Скорость вентилятора и положение шторки):** Этот байт кодирует одновременно скорость вентилятора и положение шторки. Он формируется по следующей побитовой формуле:
-  `B9 = (3-битный код скорости << 5) | (5-битный код шторки)`
+- **B9 (Fan Speed & Vane Position):** Combines fan speed and vane position into a single byte:
+  `B9 = (FanSpeedCode << 5) | VanePositionCode`
 
-  **1. 3-битные коды скорости вентилятора (старшие 3 бита B9):**
-    - `0b000` (0): Авто
-    - `0b100` (4): Тихая/Сон
-    - `0b010` (2): Низкая
-    - `0b110` (6): Средняя
-    - `0b101` (5): Высокая
+  **1. Fan Speed (3 bits, bits 7..5 of B9):**
+  - `0b000` (0): Auto
+  - `0b100` (4): Quiet / Sleep
+  - `0b010` (2): Low
+  - `0b110` (6): Medium
+  - `0b101` (5): High
 
-  **2. 5-битные коды положения шторки (младшие 5 бит B9):**
-    - `0b00000` (0): Авто
-    - `0b10000` (16): Верхняя
-    - `0b01000` (8): Средне-верхняя
-    - `0b11000` (24): Средняя
-    - `0b00100` (4): Средне-нижняя
-    - `0b10100` (20): Нижняя
-    - `0b11100` (28): Качающаяся
+  **2. Vane Position (5 bits, bits 4..0 of B9):**
+  - `0b00000` (0): Auto
+  - `0b10000` (16): Top
+  - `0b01000` (8): Medium-Top
+  - `0b11000` (24): Medium
+  - `0b00100` (4): Medium-Bottom
+  - `0b10100` (20): Bottom
+  - `0b11100` (28): Continuous Swing
 
-  **Пример вычисления B9:**
-    - Для "Тихая" скорость (`0b100`) и "Топ" положение (`0b10000`):
-      `B9 = (0b100 << 5) | 0b10000`
-      `B9 = 0b10000000 | 0b10000`
-      `B9 = 0b10010000` (что равно `0x90` в HEX)
+  **Example Calculations for B9:**
+  - Quiet Fan (`0b100`) + Top Vane (`0b10000`):
+    `B9 = (0b100 << 5) | 0b10000 = 0b10010000 = 0x90`
+  - Low Fan (`0b010`) + Medium-Bottom Vane (`0b00100`):
+    `B9 = (0b010 << 5) | 0b00100 = 0b01000100 = 0x44`
 
-    - Для "Низкая" скорость (`0b010`) и "Средне-нижняя" положение (`0b00100`):
-      `B9 = (0b010 << 5) | 0b00100`
-      `B9 = 0b01000000 | 0b00100`
-      `B9 = 0b01000100` (что равно `0x44` в HEX)
+- **B10–B12:** Reserved, all zeroes (`0x00, 0x00, 0x00`).
 
-- **B10-B12:** Предположительно нули (`0x00`).
+- **B13 (Sequence / Dynamic Byte):** Dynamic value generated by the remote control. Concurrently matched with B14 in the dictionary.
 
-- **B13 (Предположительно, случайный шум):** Этот байт, вероятно, не влияет на работу кондиционера и является своего рода "случайным" значением, генерируемым пультом (например, связанным со временем). Для целей генерации ключа в словаре `IR_CODE_DICTIONARY` его значение может быть зафиксировано, например, `0x00`. Кондиционер, предположительно, игнорирует его или принимает сигнал с любым его значением, если остальные байты корректны.
+- **B14 (Checksum / CRC):** Non-linear checksum dependent on entire frame content. Looked up via `IR_CODE_DICTIONARY`.
 
-- **B14 (Контрольная сумма):** **НЕВЫЧИСЛЯЕМАЯ.** Алгоритм не является стандартным (ни простая сумма, ни XOR, ни взвешенная сумма). Единственный рабочий способ — поиск в словаре заранее записанных значений.
-
-## 4. Путь для дальнейшей работы
-Если в будущем потребуется добавить новые, не записанные ранее комбинации, необходимо:
-1. Записать новую ИК-команду с помощью Arduino.
-2. Преобразовать ее в 14-байтовый HEX-код.
-3. Вручную добавить новую пару `[13 байт данных], [1 байт контрольной суммы]` в словарь `checksum_dictionary` в файле `eg9_climate.cpp`.
-4. Перекомпилировать и загрузить прошивку.
+## 4. Maintenance & Extending Commands
+If additional modes or unrecorded combinations need to be added:
+1. Capture raw signals via Flipper Zero (or web Flipper CLI).
+2. Decode raw timings using `tools/decode_ir.py <input.txt> <output.csv>`.
+3. Append unique records into `tools/dumps/ir_dictionary.csv`.
+4. Re-generate the C++ map using `tools/generate_ir_dictionary.py tools/dumps/ir_dictionary.csv` and update `eg9_climate.cpp`.
+5. Verify coverage using `tools/verify_coverage.py tools/dumps/ir_dictionary.csv`.
